@@ -1,47 +1,36 @@
 import os
-import subprocess
 import boto3
-import logging
+import subprocess
 
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+def download_sql_from_s3_and_import():
+    # 환경 변수에서 S3 및 RDS 설정 읽기
+    bucket_name = os.getenv("S3_BUCKET_NAME")
+    s3_directory = os.getenv("S3_DIRECTORY", "sql_backups/")
+    local_directory = os.path.join(os.getcwd(), "downloaded_sql")
+    os.makedirs(local_directory, exist_ok=True)
 
-def get_env_variable(var_name):
-    value = os.environ.get(var_name)
-    if not value:
-        raise ValueError(f"Environment variable '{var_name}' is not set.")
-    return value
+    rds_host = os.getenv("RDS_HOST")
+    rds_username = os.getenv("RDS_USERNAME")
+    rds_password = os.getenv("RDS_PASSWORD")
+    rds_database = os.getenv("RDS_DATABASE")
 
-def upload_sql_to_s3(local_directory, bucket_name, s3_directory=""):
+    # S3에서 SQL 파일 다운로드
     session = boto3.Session(profile_name="default")
     s3_client = session.client("s3")
-    for root, _, files in os.walk(local_directory):
-        for file in files:
-            if file.endswith(".sql"):
-                local_path = os.path.join(root, file)
-                s3_path = os.path.join(s3_directory, file).replace("\\", "/")
-                s3_client.upload_file(local_path, bucket_name, s3_path)
-                logging.info(f"Uploaded {file} to s3://{bucket_name}/{s3_path}")
+    objects = s3_client.list_objects_v2(Bucket=bucket_name, Prefix=s3_directory)
 
-def import_sql_to_rds(sql_directory):
-    db_host = get_env_variable("DB_HOST")
-    db_user = get_env_variable("DB_USER")
-    db_password = get_env_variable("DB_PASSWORD")
-    db_name = get_env_variable("DB_NAME")
-    for file in os.listdir(sql_directory):
-        if file.endswith(".sql"):
-            file_path = os.path.join(sql_directory, file)
-            cmd = f"mysql -h {db_host} -u {db_user} -p{db_password} {db_name} < {file_path}"
-            subprocess.run(cmd, shell=True, check=True)
-            logging.info(f"Executed SQL file: {file}")
+    for obj in objects.get('Contents', []):
+        s3_file = obj['Key']
+        if s3_file.endswith('.sql'):
+            local_path = os.path.join(local_directory, os.path.basename(s3_file))
+            print(f"Downloading {s3_file} to {local_path}...")
+            s3_client.download_file(bucket_name, s3_file, local_path)
 
-if __name__ == "__main__":
-    rawDB_dir = "./rawDB"
-    backup_dir = "./backup"
-    os.makedirs(backup_dir, exist_ok=True)
-
-    # SQL 파일 RDS로 업로드 및 백업 디렉토리 이동
-    import_sql_to_rds(rawDB_dir)
-    for file in os.listdir(rawDB_dir):
-        if file.endswith(".sql"):
-            os.rename(os.path.join(rawDB_dir, file), os.path.join(backup_dir, file))
-    logging.info("SQL files imported and moved to backup.")
+            # RDS로 데이터 삽입
+            print(f"Importing {local_path} into RDS...")
+            try:
+                cmd = f"mysql -h {rds_host} -u {rds_username} -p{rds_password} {rds_database} < {local_path}"
+                subprocess.run(cmd, shell=True, check=True)
+                print(f"Imported {local_path} into RDS successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error importing {local_path}: {e}")
