@@ -6,9 +6,8 @@ on:
       - main
 
 jobs:
-  process-sql:
-    runs-on: ubuntu-latest  # 기본 환경을 Ubuntu로 설정
-
+  upload-to-s3:
+    runs-on: ubuntu-latest  # Ubuntu 환경에서 실행
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -22,53 +21,13 @@ jobs:
         run: |
           pip install boto3 mysql-connector-python
 
-      - name: Validate Environment Variables
-        run: |
-          if [ -z "${LOCAL_DB_HOST}" ] || [ -z "${LOCAL_DB_USER}" ] || [ -z "${LOCAL_DB_PASSWORD}" ] || [ -z "${LOCAL_DB_NAME}" ]; then
-            echo "Missing environment variables for preprocess.py"
-            exit 1
-          fi
-          if [ -z "${RDS_HOST}" ] || [ -z "${RDS_USERNAME}" ] || [ -z "${RDS_PASSWORD}" ] || [ -z "${RDS_DATABASE}" ]; then
-            echo "Missing environment variables for app.py"
-            exit 1
-          fi
+      - name: Execute Local SQL Script
         env:
-          LOCAL_DB_HOST: ${{ secrets.LOCAL_DB_HOST }}
-          LOCAL_DB_USER: ${{ secrets.LOCAL_DB_USER }}
-          LOCAL_DB_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
-          LOCAL_DB_NAME: ${{ secrets.LOCAL_DB_NAME }}
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
-          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
-          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
-
-  test-windows-mysql:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install MySQL Client
+          LOCALSQL_SCRIPT: "C:/Users/User/Desktop/AWS/localsql.py"
         run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-client
-
-      - name: Test MySQL Connection
-        env:
-          MYSQL_HOST: ${{ secrets.LOCAL_DB_HOST }}
-          MYSQL_PORT: "3306"
-          MYSQL_USER: ${{ secrets.LOCAL_DB_USER }}
-          MYSQL_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
-        shell: bash
-        run: |
-          echo "Testing MySQL Connection..."
-          mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "SHOW DATABASES;"
-
-  upload-to-s3:
-    runs-on: ubuntu-latest  # Ubuntu 환경에서 S3 업로드 실행
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+          echo "Running localsql.py to dump data..."
+          python "${LOCALSQL_SCRIPT}"
+          echo "localsql.py execution completed successfully!"
 
       - name: Run SQL Dump and Upload to S3
         env:
@@ -85,7 +44,7 @@ jobs:
         run: python preprocess.py
 
   import-to-rds:
-    runs-on: ubuntu-latest  # Ubuntu 환경에서 RDS 데이터베이스에 Import 실행
+    runs-on: ubuntu-latest  # RDS로 Import 실행
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
