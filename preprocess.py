@@ -1,131 +1,48 @@
 import os
+import subprocess
 import boto3
-import mysql.connector
 
 def validate_env_variables():
     """환경 변수 유효성 검사"""
-    required_env_vars = ["LOCAL_DB_HOST", "LOCAL_DB_NAME", "LOCAL_DB_USER", "LOCAL_DB_PASSWORD",
-                        "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME", "TABLE_NAME"]
-    
+    required_env_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME", "EXPORT_DIR"]
     for var in required_env_vars:
         if not os.getenv(var):
             raise EnvironmentError(f"환경 변수 '{var}'가 설정되지 않았습니다.")
 
-def test_mysql_connection():
-    """MySQL 연결 확인"""
-    LOCAL_DB_HOST = os.environ.get("LOCAL_DB_HOST")
-    LOCAL_DB_NAME = os.environ.get("LOCAL_DB_NAME")
-    LOCAL_DB_USER = os.environ.get("LOCAL_DB_USER")
-    LOCAL_DB_PASSWORD = os.environ.get("LOCAL_DB_PASSWORD")
-
+def run_localsql_script():
+    """Shell 명령어로 localsql.py 실행"""
+    localsql_path = r"C:\Users\User\Desktop\AWS\localsql.py"
     try:
-        conn = mysql.connector.connect(
-            host=LOCAL_DB_HOST,
-            user=LOCAL_DB_USER,
-            password=LOCAL_DB_PASSWORD, 
-            database=LOCAL_DB_NAME
-        )
-        print("MySQL 연결 성공!")
-        cursor = conn.cursor()
-        cursor.execute("SHOW DATABASES")
-        for db in cursor:
-            print("DB:", db)
-        cursor.close()
-        conn.close()
-    except Exception as e:
-        print("MySQL 연결 실패:", e)
-        raise  # 실패 시 프로그램 종료
+        print("Executing localsql.py...")
+        subprocess.run(["python", localsql_path], check=True)
+        print("localsql.py executed successfully!")
+    except subprocess.CalledProcessError as e:
+        print(f"Error while executing localsql.py: {e}")
+        raise
 
-def dump_and_upload_to_s3():
-    # AWS S3 설정 (환경 변수에서 키 가져오기)
-    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
-    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
-    aws_region = os.getenv("AWS_REGION", "us-east-1")
-
-    # S3 클라이언트 생성
-    s3_client = boto3.client(
-        "s3",
-        aws_access_key_id=aws_access_key,
-        aws_secret_access_key=aws_secret_key,
-        region_name=aws_region
-    )
-
-    # 로컬 DB 설정
-    local_db_host = os.getenv("LOCAL_DB_HOST")
-    local_db_user = os.getenv("LOCAL_DB_USER")
-    local_db_password = os.getenv("LOCAL_DB_PASSWORD")
-    local_db_name = os.getenv("LOCAL_DB_NAME")
-    table_name = os.getenv("TABLE_NAME")
-    chunk_size = 300  # 청크 크기
-
-    # SQL 파일 저장 경로
-    output_dir = os.path.join(os.getcwd(), "rawDB")
-    os.makedirs(output_dir, exist_ok=True)
-
-    # S3 설정
-    bucket_name = os.getenv("S3_BUCKET_NAME")
+def upload_sql_to_s3():
+    """로컬의 .sql 파일을 S3로 업로드"""
+    export_dir = os.getenv("EXPORT_DIR")
+    s3_bucket_name = os.getenv("S3_BUCKET_NAME")
     s3_directory = os.getenv("S3_DIRECTORY", "sql_backups/")
 
-    try:
-        # MySQL 연결
-        conn = mysql.connector.connect(
-            host=local_db_host,
-            user=local_db_user,
-            password=local_db_password,
-            database=local_db_name
-        )
-        cursor = conn.cursor()
+    # AWS S3 클라이언트 설정
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key=os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name=os.getenv("AWS_REGION", "us-east-1")
+    )
 
-        # 총 데이터 개수 확인
-        total_rows_query = f"SELECT COUNT(*) FROM {table_name};"
-        cursor.execute(total_rows_query)
-        total_rows = cursor.fetchone()[0]
-        print(f"Total rows in table '{table_name}': {total_rows}")
+    for file_name in os.listdir(export_dir):
+        if file_name.endswith(".sql"):
+            local_file_path = os.path.join(export_dir, file_name)
+            s3_path = os.path.join(s3_directory, file_name).replace("\\", "/")
+            print(f"Uploading '{local_file_path}' to s3://{s3_bucket_name}/{s3_path}...")
+            s3_client.upload_file(local_file_path, s3_bucket_name, s3_path)
 
-        # 데이터 청크 단위로 덤프 및 S3 업로드
-        for offset in range(0, total_rows, chunk_size):
-            output_file = os.path.join(output_dir, f"{table_name}_chunk_{offset // chunk_size + 1}.sql")
-            print(f"Dumping rows {offset} to {offset + chunk_size} into {output_file}...")
-            dump_query = f"SELECT * FROM {table_name} LIMIT {chunk_size} OFFSET {offset};"
-            cursor.execute(dump_query)
-            rows = cursor.fetchall()
-
-            # SQL 파일 저장
-            with open(output_file, "w") as f:
-                for row in rows:
-                    row_data = ", ".join(
-                        ["'{}'".format(str(item).replace("'", "\\'")) if item is not None else "NULL" for item in row]
-                    )
-                    f.write(f"INSERT INTO `{table_name}` VALUES ({row_data});\n")
-
-            # S3로 업로드
-            s3_path = os.path.join(s3_directory, os.path.basename(output_file)).replace("\\", "/")
-            s3_client.upload_file(output_file, bucket_name, s3_path)
-            print(f"Uploaded {output_file} to s3://{bucket_name}/{s3_path}")
-
-    except mysql.connector.Error as e:
-        print(f"MySQL Error: {e}")
-    except Exception as e:
-        print(f"Unexpected Error: {e}")
-    finally:
-        if 'cursor' in locals():
-            cursor.close()
-        if 'conn' in locals():
-            conn.close()
-
-def debug_env_variables():
-    """환경 변수 디버깅 (PASSWORD 제외)"""
-    print("** 환경 변수 확인 **")
-    print(f"LOCAL_DB_HOST: {os.getenv('LOCAL_DB_HOST')}")
-    print(f"LOCAL_DB_NAME: {os.getenv('LOCAL_DB_NAME')}")
-    print(f"LOCAL_DB_USER: {os.getenv('LOCAL_DB_USER')}")
-    print(f"S3_BUCKET_NAME: {os.getenv('S3_BUCKET_NAME')}")
-    print(f"TABLE_NAME: {os.getenv('TABLE_NAME')}")
+    print("SQL 파일 S3 업로드 완료!")
 
 if __name__ == "__main__":
-    debug_env_variables()  # 환경 변수 디버깅
-    validate_env_variables()
-    print("** MySQL 연결 확인 시작 **")
-    test_mysql_connection()
-    print("** 데이터 덤프 및 S3 업로드 시작 **")
-    dump_and_upload_to_s3()
+    validate_env_variables()  # 환경 변수 확인
+    run_localsql_script()     # Shell 명령어로 localsql
