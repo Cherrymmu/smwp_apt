@@ -5,7 +5,7 @@ import mysql.connector
 def validate_env_variables():
     """환경 변수 유효성 검사"""
     required_env_vars = ["LOCAL_DB_HOST", "LOCAL_DB_NAME", "LOCAL_DB_USER", "LOCAL_DB_PASSWORD",
-                         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME", "TABLE_NAME"]
+                        "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME", "TABLE_NAME"]
     
     for var in required_env_vars:
         if not os.getenv(var):
