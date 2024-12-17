@@ -43,23 +43,27 @@ jobs:
           RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
 
   test-windows-mysql:
-    runs-on: windows-latest  # Windows 환경에서 실행
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Test MySQL Connection (Windows Only)
-        if: runner.os == 'Windows'
+      - name: Install MySQL Client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+      - name: Test MySQL Connection
         env:
           MYSQL_HOST: ${{ secrets.LOCAL_DB_HOST }}
           MYSQL_PORT: "3306"
           MYSQL_USER: ${{ secrets.LOCAL_DB_USER }}
           MYSQL_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
-        shell: cmd
+        shell: bash
         run: |
           echo "Testing MySQL Connection..."
-          "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -h "%MYSQL_HOST%" -P "%MYSQL_PORT%" -u "%MYSQL_USER%" -p"%MYSQL_PASSWORD%" -e "SHOW DATABASES;"
-      
+          mysql -h "${MYSQL_HOST}" -P "${MYSQL_PORT}" -u "${MYSQL_USER}" -p"${MYSQL_PASSWORD}" -e "SHOW DATABASES;"
+
   upload-to-s3:
     runs-on: ubuntu-latest  # Ubuntu 환경에서 S3 업로드 실행
     steps:
