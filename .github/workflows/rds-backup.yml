@@ -55,9 +55,10 @@ jobs:
           MYSQL_PORT: "3306"
           MYSQL_USER: ${{ secrets.LOCAL_DB_USER }}
           MYSQL_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
+        shell: cmd
         run: |
           echo "Testing MySQL Connection..."
-          cmd /c ""C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -h %MYSQL_HOST% -P %MYSQL_PORT% -u %MYSQL_USER% -p%MYSQL_PASSWORD% -e "SHOW DATABASES;""
+          "C:\Program Files\MySQL\MySQL Server 8.0\bin\mysql.exe" -h "%MYSQL_HOST%" -P "%MYSQL_PORT%" -u "%MYSQL_USER%" -p"%MYSQL_PASSWORD%" -e "SHOW DATABASES;"
       
   upload-to-s3:
     runs-on: ubuntu-latest  # Ubuntu 환경에서 S3 업로드 실행
