@@ -3,7 +3,20 @@ import boto3
 import mysql.connector
 
 def dump_and_upload_to_s3():
-    # 환경 변수에서 설정 읽기
+    # AWS S3 설정 (환경 변수에서 키 가져오기)
+    aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
+    aws_secret_key = os.getenv("AWS_SECRET_ACCESS_KEY")
+    aws_region = os.getenv("AWS_REGION", "us-east-1")
+
+    # S3 클라이언트 생성
+    s3_client = boto3.client(
+        "s3",
+        aws_access_key_id=aws_access_key,
+        aws_secret_access_key=aws_secret_key,
+        region_name=aws_region
+    )
+
+    # 로컬 DB 설정
     local_db_host = os.getenv("LOCAL_DB_HOST")
     local_db_user = os.getenv("LOCAL_DB_USER")
     local_db_password = os.getenv("LOCAL_DB_PASSWORD")
@@ -15,11 +28,9 @@ def dump_and_upload_to_s3():
     output_dir = os.path.join(os.getcwd(), "rawDB")
     os.makedirs(output_dir, exist_ok=True)
 
-    # AWS S3 설정
+    # S3 설정
     bucket_name = os.getenv("S3_BUCKET_NAME")
-    s3_directory = os.getenv("S3_DIRECTORY", "sql_backups/")  # 기본 S3 디렉토리
-    session = boto3.Session(profile_name="default")
-    s3_client = session.client("s3")
+    s3_directory = os.getenv("S3_DIRECTORY", "sql_backups/")
 
     try:
         # 로컬 DB 연결

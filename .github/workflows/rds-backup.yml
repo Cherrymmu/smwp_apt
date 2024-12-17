@@ -31,6 +31,9 @@ jobs:
           TABLE_NAME: ${{ secrets.TABLE_NAME }}
           S3_BUCKET_NAME: ${{ secrets.S3_BUCKET_NAME }}
           S3_DIRECTORY: "sql_backups/"
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: python preprocess.py
 
       - name: Run SQL Download and Import to RDS
@@ -41,4 +44,7 @@ jobs:
           RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
           RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
           RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_REGION }}
         run: python app.py
