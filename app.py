@@ -1,6 +1,19 @@
 import os
 import boto3
 import mysql.connector
+import logging
+
+# 로깅 설정
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+logger = logging.getLogger()
+
+def validate_env_variables():
+    """환경 변수 유효성 검사"""
+    required_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME",
+                     "RDS_HOST", "RDS_USERNAME", "RDS_PASSWORD", "RDS_DATABASE"]
+    for var in required_vars:
+        if not os.getenv(var):
+            raise EnvironmentError(f"환경 변수 '{var}'가 설정되지 않았습니다.")
 
 def download_and_import_to_rds():
     # S3 설정
@@ -29,18 +42,19 @@ def download_and_import_to_rds():
     os.makedirs(download_dir, exist_ok=True)
 
     try:
-        # S3 버킷에서 SQL 파일 리스트 가져오기
+        logger.info("S3 버킷에서 SQL 파일 리스트 가져오는 중...")
         response = s3_client.list_objects_v2(Bucket=s3_bucket, Prefix=s3_directory)
+        
         for obj in response.get("Contents", []):
             file_key = obj["Key"]
             file_name = os.path.basename(file_key)
             local_file_path = os.path.join(download_dir, file_name)
 
-            print(f"Downloading {file_key} from S3 to {local_file_path}...")
+            logger.info(f"Downloading {file_key} from S3 to {local_file_path}...")
             s3_client.download_file(s3_bucket, file_key, local_file_path)
 
             # RDS 연결 및 SQL 파일 실행
-            print(f"Importing {local_file_path} into RDS database...")
+            logger.info(f"Importing {local_file_path} into RDS database...")
             conn = mysql.connector.connect(
                 host=rds_host,
                 user=rds_user,
@@ -51,17 +65,20 @@ def download_and_import_to_rds():
 
             with open(local_file_path, "r") as sql_file:
                 sql_script = sql_file.read()
-                for statement in sql_script.split(";\n"):
-                    if statement.strip():
-                        cursor.execute(statement)
+                cursor.execute(sql_script, multi=True)
             conn.commit()
-            print(f"Successfully imported {file_name} into RDS.")
+            logger.info(f"Successfully imported {file_name} into RDS.")
 
             cursor.close()
             conn.close()
 
+    except mysql.connector.Error as db_error:
+        logger.error(f"RDS 데이터베이스 오류: {db_error}")
+    except boto3.exceptions.Boto3Error as s3_error:
+        logger.error(f"S3 접근 오류: {s3_error}")
     except Exception as e:
-        print(f"Error: {e}")
+        logger.error(f"알 수 없는 오류 발생: {e}")
 
 if __name__ == "__main__":
+    validate_env_variables()
     download_and_import_to_rds()

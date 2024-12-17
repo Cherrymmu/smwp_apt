@@ -42,6 +42,16 @@ jobs:
           RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
           RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
 
+      - name: Test MySQL Connection
+        env:
+          MYSQL_HOST: ${{ secrets.LOCAL_DB_HOST }}
+          MYSQL_PORT: "3306"
+          MYSQL_USER: ${{ secrets.LOCAL_DB_USER }}
+          MYSQL_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
+        run: |
+          echo "Testing MySQL Connection..."
+          mysql -h $MYSQL_HOST -P $MYSQL_PORT -u $MYSQL_USER -p$MYSQL_PASSWORD -e "SHOW DATABASES;"
+
       - name: Run SQL Dump and Upload to S3
         env:
           LOCAL_DB_HOST: ${{ secrets.LOCAL_DB_HOST }}

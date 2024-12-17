@@ -2,6 +2,15 @@ import os
 import boto3
 import mysql.connector
 
+def validate_env_variables():
+    """환경 변수 유효성 검사"""
+    required_env_vars = ["LOCAL_DB_HOST", "LOCAL_DB_NAME", "LOCAL_DB_USER", "LOCAL_DB_PASSWORD",
+                         "AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME", "TABLE_NAME"]
+    
+    for var in required_env_vars:
+        if not os.getenv(var):
+            raise EnvironmentError(f"환경 변수 '{var}'가 설정되지 않았습니다.")
+
 def test_mysql_connection():
     """MySQL 연결 확인"""
     LOCAL_DB_HOST = os.environ.get("LOCAL_DB_HOST")
@@ -26,7 +35,6 @@ def test_mysql_connection():
     except Exception as e:
         print("MySQL 연결 실패:", e)
         raise  # 실패 시 프로그램 종료
-
 
 def dump_and_upload_to_s3():
     # AWS S3 설정 (환경 변수에서 키 가져오기)
@@ -105,8 +113,19 @@ def dump_and_upload_to_s3():
         if 'conn' in locals():
             conn.close()
 
+def debug_env_variables():
+    """환경 변수 디버깅 (PASSWORD 제외)"""
+    print("** 환경 변수 확인 **")
+    print(f"LOCAL_DB_HOST: {os.getenv('LOCAL_DB_HOST')}")
+    print(f"LOCAL_DB_NAME: {os.getenv('LOCAL_DB_NAME')}")
+    print(f"LOCAL_DB_USER: {os.getenv('LOCAL_DB_USER')}")
+    print(f"S3_BUCKET_NAME: {os.getenv('S3_BUCKET_NAME')}")
+    print(f"TABLE_NAME: {os.getenv('TABLE_NAME')}")
+
 if __name__ == "__main__":
+    debug_env_variables()  # 환경 변수 디버깅
+    validate_env_variables()
     print("** MySQL 연결 확인 시작 **")
-    test_mysql_connection()  # MySQL 연결 확인
+    test_mysql_connection()
     print("** 데이터 덤프 및 S3 업로드 시작 **")
     dump_and_upload_to_s3()
