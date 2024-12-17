@@ -2,6 +2,32 @@ import os
 import boto3
 import mysql.connector
 
+def test_mysql_connection():
+    """MySQL 연결 확인"""
+    LOCAL_DB_HOST = os.environ.get("LOCAL_DB_HOST")
+    LOCAL_DB_NAME = os.environ.get("LOCAL_DB_NAME")
+    LOCAL_DB_USER = os.environ.get("LOCAL_DB_USER")
+    LOCAL_DB_PASSWORD = os.environ.get("LOCAL_DB_PASSWORD")
+
+    try:
+        conn = mysql.connector.connect(
+            host=LOCAL_DB_HOST,
+            user=LOCAL_DB_USER,
+            password=LOCAL_DB_PASSWORD,
+            database=LOCAL_DB_NAME
+        )
+        print("MySQL 연결 성공!")
+        cursor = conn.cursor()
+        cursor.execute("SHOW DATABASES")
+        for db in cursor:
+            print("DB:", db)
+        cursor.close()
+        conn.close()
+    except Exception as e:
+        print("MySQL 연결 실패:", e)
+        raise  # 실패 시 프로그램 종료
+
+
 def dump_and_upload_to_s3():
     # AWS S3 설정 (환경 변수에서 키 가져오기)
     aws_access_key = os.getenv("AWS_ACCESS_KEY_ID")
@@ -33,7 +59,7 @@ def dump_and_upload_to_s3():
     s3_directory = os.getenv("S3_DIRECTORY", "sql_backups/")
 
     try:
-        # 로컬 DB 연결
+        # MySQL 연결
         conn = mysql.connector.connect(
             host=local_db_host,
             user=local_db_user,
@@ -80,4 +106,7 @@ def dump_and_upload_to_s3():
             conn.close()
 
 if __name__ == "__main__":
+    print("** MySQL 연결 확인 시작 **")
+    test_mysql_connection()  # MySQL 연결 확인
+    print("** 데이터 덤프 및 S3 업로드 시작 **")
     dump_and_upload_to_s3()

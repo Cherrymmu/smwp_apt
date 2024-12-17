@@ -22,6 +22,26 @@ jobs:
         run: |
           pip install boto3 mysql-connector-python
 
+      - name: Validate Environment Variables
+        run: |
+          if [ -z "${LOCAL_DB_HOST}" ] || [ -z "${LOCAL_DB_USER}" ] || [ -z "${LOCAL_DB_PASSWORD}" ] || [ -z "${LOCAL_DB_NAME}" ]; then
+            echo "Missing environment variables for preprocess.py"
+            exit 1
+          fi
+          if [ -z "${RDS_HOST}" ] || [ -z "${RDS_USERNAME}" ] || [ -z "${RDS_PASSWORD}" ] || [ -z "${RDS_DATABASE}" ]; then
+            echo "Missing environment variables for app.py"
+            exit 1
+          fi
+        env:
+          LOCAL_DB_HOST: ${{ secrets.LOCAL_DB_HOST }}
+          LOCAL_DB_USER: ${{ secrets.LOCAL_DB_USER }}
+          LOCAL_DB_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
+          LOCAL_DB_NAME: ${{ secrets.LOCAL_DB_NAME }}
+          RDS_HOST: ${{ secrets.RDS_HOST }}
+          RDS_USERNAME: ${{ secrets.RDS_USERNAME }}
+          RDS_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
+
       - name: Run SQL Dump and Upload to S3
         env:
           LOCAL_DB_HOST: ${{ secrets.LOCAL_DB_HOST }}
