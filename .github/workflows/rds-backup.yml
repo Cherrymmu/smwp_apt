@@ -1,0 +1,127 @@
+name: Import SQL and Backup to S3
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  import-and-backup:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.9"
+
+      - name: Install dependencies
+        run: |
+          pip install boto3 schedule mysql-connector-python
+          sudo apt-get update
+          sudo apt-get install -y mysql-client
+
+          - name: Run Preprocess Script
+          env:
+            LOCAL_DB_HOST: ${{ secrets.LOCAL_DB_HOST }}
+            LOCAL_DB_USER: ${{ secrets.LOCAL_DB_USER }}
+            LOCAL_DB_PASSWORD: ${{ secrets.LOCAL_DB_PASSWORD }}
+            LOCAL_DB_NAME: ${{ secrets.LOCAL_DB_NAME }}
+          run: python preprocess.py
+
+      - name: Configure MySQL credentials
+        run: |
+          echo "[client]" > ~/.my.cnf
+          echo "user=${{ secrets.RDS_USERNAME }}" >> ~/.my.cnf
+          echo "password=${{ secrets.RDS_PASSWORD }}" >> ~/.my.cnf
+          echo "host=${{ secrets.RDS_HOST }}" >> ~/.my.cnf
+          chmod 600 ~/.my.cnf
+
+      - name: Configure AWS CLI
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Debug environment variables
+        run: |
+          echo "S3_BUCKET=${{ secrets.S3_BUCKET_NAME }}"
+          echo "RDS_HOST=${{ secrets.RDS_HOST }}"
+
+      - name: Create backup directory
+        run: mkdir -p backup
+
+      - name: Verify MySQL credentials
+        run: cat ~/.my.cnf
+
+      - name: Check directories and files
+        run: |
+          echo "Checking rawDB directory..."
+          ls -la rawDB
+          echo "Checking backup directory..."
+          ls -la backup
+
+      - name: Check and copy SQL files from rawDB
+        run: |
+          echo "Current directory:"
+          pwd
+          echo "Directory contents:"
+          ls -la
+          echo "rawDB directory contents:"
+          ls -la rawDB/
+
+          # 모든 .sql 파일 복사
+          for file in rawDB/*.sql; do
+            if [ -f "$file" ]; then
+              echo "Copying $file to backup directory..."
+              cp "$file" backup/
+            else
+              echo "No .sql files found in rawDB directory."
+            fi
+          done
+
+          echo "Checking rawDB directory after copying..."
+          ls -la rawDB
+          echo "Checking backup directory after copying..."
+          ls -la backup
+
+      - name: Run Import Script
+        env:
+          DB_ENGINE: ${{ secrets.RDS_ENGINE }}
+          DB_HOST: ${{ secrets.RDS_HOST }}
+          DB_USER: ${{ secrets.RDS_USERNAME }}
+          DB_PASSWORD: ${{ secrets.RDS_PASSWORD }}
+          DB_NAME: ${{ secrets.RDS_DATABASE }}
+          S3_BUCKET: ${{ secrets.S3_BUCKET_NAME }}
+        run: |
+          echo "SQL file path:"
+          ls -la backup/
+          
+          # 고정 파일 디렉토리 설정
+          fixed_dir="fixed_backup"
+          mkdir -p $fixed_dir  # 고정 디렉토리 생성
+
+          # backup 디렉토리의 모든 SQL 파일 처리 (고정 파일 제외)
+          if ls backup/*.sql 1> /dev/null 2>&1; then
+            for file in backup/*.sql; do
+              base_file=$(basename "$file")
+
+              # 고정 파일 디렉토리에서 동일한 파일이 있는지 확인
+              if [ -f "$fixed_dir/$base_file" ]; then
+                echo "Skipping fixed SQL file: $file"
+                continue
+              fi
+
+              echo "Executing $file..."
+              if ! mysql -h "${{ secrets.RDS_HOST }}" -u "${{ secrets.RDS_USERNAME }}" -D "${{ secrets.RDS_DATABASE }}" < "$file"; then
+                echo "Error executing $file"
+                exit 1
+              fi
+            done
+          else
+            echo "No SQL files found in backup directory. Skipping execution."
+          fi
