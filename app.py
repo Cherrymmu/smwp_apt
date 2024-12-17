@@ -10,7 +10,7 @@ logger = logging.getLogger()
 def validate_env_variables():
     """환경 변수 유효성 검사"""
     required_vars = ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY", "S3_BUCKET_NAME",
-                     "RDS_HOST", "RDS_USERNAME", "RDS_PASSWORD", "RDS_DATABASE"]
+                    "RDS_HOST", "RDS_USERNAME", "RDS_PASSWORD", "RDS_DATABASE"]
     for var in required_vars:
         if not os.getenv(var):
             raise EnvironmentError(f"환경 변수 '{var}'가 설정되지 않았습니다.")

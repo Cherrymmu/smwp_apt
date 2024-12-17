@@ -22,7 +22,7 @@ def test_mysql_connection():
         conn = mysql.connector.connect(
             host=LOCAL_DB_HOST,
             user=LOCAL_DB_USER,
-            password=LOCAL_DB_PASSWORD,
+            password=LOCAL_DB_PASSWORD, 
             database=LOCAL_DB_NAME
         )
         print("MySQL 연결 성공!")
